@@ -1,22 +1,146 @@
 <Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:vm="using:CareFlow.Desktop.ViewModels"
-        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
-        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-        mc:Ignorable="d" d:DesignWidth="800" d:DesignHeight="450"
+        xmlns:models="using:CareFlow.Application.Models"
         x:Class="CareFlow.Desktop.Views.MainWindow"
-        x:DataType="vm:MainViewModel"
-        Icon="/Assets/avalonia-logo.ico"
-        Title="CareFlow.Desktop">
+        x:DataType="vm:MainWindowViewModel"
+        Title="CareFlow - Diagnostic Bookings"
+        Width="1000" Height="640"
+        MinWidth="760" MinHeight="520">
 
-    <Design.DataContext>
-        <!-- This only sets the DataContext for the previewer in an IDE,
-             to set the actual DataContext for runtime, set the DataContext property in code (look at App.axaml.cs) -->
-        <vm:MainViewModel />
-    </Design.DataContext>
+  <Window.Styles>
+    <Style Selector="TextBlock.heading">
+      <Setter Property="FontSize" Value="18" />
+      <Setter Property="FontWeight" Value="Bold" />
+      <Setter Property="Margin" Value="0,0,0,8" />
+    </Style>
+    <Style Selector="TextBlock.label">
+      <Setter Property="FontWeight" Value="SemiBold" />
+      <Setter Property="Margin" Value="0,8,0,2" />
+    </Style>
+    <Style Selector="TextBlock.error">
+      <Setter Property="Foreground" Value="#C62828" />
+    </Style>
+    <Style Selector="TextBlock.ok">
+      <Setter Property="Foreground" Value="#2E7D32" />
+    </Style>
+  </Window.Styles>
 
-    <TextBox Text="{Binding Greeting}"
-             HorizontalAlignment="Center"
-             VerticalAlignment="Center" />
+  <Grid ColumnDefinitions="3*,2*" ColumnSpacing="16" Margin="16">
 
+    <!-- LEFT: booking form -->
+    <Border Grid.Column="0" MinWidth="380" Padding="12"
+            BorderThickness="1" BorderBrush="#40808080" CornerRadius="6">
+      <StackPanel x:DataType="vm:BookingFormViewModel"
+                  DataContext="{Binding Form}"
+                  IsEnabled="{Binding IsFormEnabled}">
+
+        <TextBlock Classes="heading" Text="New Booking" />
+
+        <TextBlock Classes="label" Text="Patient" />
+        <ComboBox HorizontalAlignment="Stretch"
+                  PlaceholderText="Select a patient"
+                  ItemsSource="{Binding Patients}"
+                  SelectedItem="{Binding SelectedPatient}">
+          <ComboBox.ItemTemplate>
+            <DataTemplate x:DataType="models:PatientOption">
+              <TextBlock Text="{Binding FullName}" />
+            </DataTemplate>
+          </ComboBox.ItemTemplate>
+        </ComboBox>
+
+        <TextBlock Classes="label" Text="Booking date" />
+        <DatePicker SelectedDate="{Binding SelectedDate}" />
+
+        <TextBlock Classes="label" Text="Services (choose 1 to 3)" />
+        <ItemsControl ItemsSource="{Binding Services}">
+          <ItemsControl.ItemTemplate>
+            <DataTemplate x:DataType="vm:ServiceChoiceViewModel">
+              <Grid ColumnDefinitions="*,Auto" Margin="0,2">
+                <CheckBox Grid.Column="0"
+                          Content="{Binding Name}"
+                          IsChecked="{Binding IsSelected}" />
+                <TextBlock Grid.Column="1"
+                           VerticalAlignment="Center"
+                           Text="{Binding AvailabilityText}" />
+              </Grid>
+            </DataTemplate>
+          </ItemsControl.ItemTemplate>
+        </ItemsControl>
+
+        <TextBlock Margin="0,8,0,0" Opacity="0.75" Text="{Binding SelectionHint}" />
+
+        <Button Margin="0,12,0,0"
+                HorizontalAlignment="Stretch"
+                HorizontalContentAlignment="Center"
+                Content="CONFIRM BOOKING"
+                Command="{Binding ConfirmBookingCommand}" />
+
+        <TextBlock Margin="0,12,0,0" TextWrapping="Wrap"
+                   Text="{Binding StatusMessage}"
+                   Classes.error="{Binding IsError}"
+                   Classes.ok="{Binding !IsError}" />
+      </StackPanel>
+    </Border>
+
+    <!-- RIGHT: history + detail -->
+    <Border Grid.Column="1" MinWidth="280" Padding="12"
+            BorderThickness="1" BorderBrush="#40808080" CornerRadius="6">
+      <Grid x:DataType="vm:BookingHistoryViewModel"
+            DataContext="{Binding History}"
+            RowDefinitions="Auto,*,Auto,Auto" RowSpacing="8">
+
+        <TextBlock Grid.Row="0" Classes="heading" Text="Confirmed Bookings" />
+
+        <ListBox Grid.Row="1"
+                 ItemsSource="{Binding Bookings}"
+                 SelectedItem="{Binding SelectedBooking}">
+          <ListBox.ItemTemplate>
+            <DataTemplate x:DataType="models:BookingSummary">
+              <StackPanel>
+                <TextBlock FontWeight="SemiBold">
+                  <Run Text="#" /><Run Text="{Binding BookingId}" />
+                  <Run Text=" - " /><Run Text="{Binding PatientName}" />
+                </TextBlock>
+                <TextBlock Opacity="0.75">
+                  <Run Text="{Binding BookingDate, StringFormat='{}{0:MMM dd, yyyy}'}" />
+                  <Run Text=" | " /><Run Text="{Binding ServiceCount}" /><Run Text=" service(s)" />
+                </TextBlock>
+              </StackPanel>
+            </DataTemplate>
+          </ListBox.ItemTemplate>
+        </ListBox>
+
+        <TextBlock Grid.Row="2" TextWrapping="Wrap" Text="{Binding StatusMessage}" />
+
+        <!-- Detail: all bindings tolerate Detail being null -->
+        <Border Grid.Row="3" Padding="8" CornerRadius="4" Background="#15808080"
+                IsVisible="{Binding Detail, Converter={x:Static ObjectConverters.IsNotNull}}">
+          <StackPanel Spacing="2">
+            <TextBlock FontWeight="Bold" Text="Booking details" />
+            <TextBlock Text="{Binding Detail.PatientName, StringFormat='Patient: {0}'}" />
+            
+            <!-- FIXED: Split into Run tags to avoid escape character parsing errors -->
+            <TextBlock>
+                <Run Text="Date: " />
+                <Run Text="{Binding Detail.BookingDate, StringFormat='{}{0:MMM dd, yyyy}'}" />
+            </TextBlock>
+            
+            <TextBlock Text="Services:" FontWeight="SemiBold" Margin="0,4,0,0" />
+            <ItemsControl ItemsSource="{Binding Detail.ServiceNames}">
+              <ItemsControl.ItemTemplate>
+                <DataTemplate x:DataType="x:String">
+                  <!-- FIXED: Split bullet point and binding into separate Run tags -->
+                  <TextBlock>
+                      <Run Text="• " />
+                      <Run Text="{Binding}" />
+                  </TextBlock>
+                </DataTemplate>
+              </ItemsControl.ItemTemplate>
+            </ItemsControl>
+          </StackPanel>
+        </Border>
+      </Grid>
+    </Border>
+  </Grid>
 </Window>
